@@ -11,7 +11,7 @@ __uge_host_attributes="arch calendar cpu h_core h_cpu h_data h_fsize hostname h_
 
 __uge_host_attributes="arch bu build calendar cpu cpu_cache cpu_code cpus_used cputype docker d_rt h_core h_cpu h_data health h_fsize hostname h_rss h_rt h_stack ht h_vmem kernel_version load_avg load_long load_medium load_short longidle mc m_cache_l1 m_cache_l2 m_cache_l3 m_core mem_avail mem_free mem_inst mem_total mem_used m_gpu min_cpu_interval m_mem_free m_mem_free_n0 m_mem_free_n1 m_mem_total m_mem_total_n0 m_mem_total_n1 m_mem_used m_numa_nodes model m_socket mtc m_thread m_topology m_topology_inuse m_topology_numa ncps np_load_avg np_load_long np_load_medium np_load_short num_proc os os_bit os_distribution os_minor os_version pool project qname qsc regress rerun res_id s_core s_cpu scratch_free s_data seq_no s_fsize slots s_rss s_rt s_stack s_vmem swap_free swap_total swap_used tmpdir vg virtual_free virtual_total virtual_used vm"
 
-__uge_host_discrete_attributes=("arch" "bu" "cputype" "cpu_code" "docker" "health" "m_core" "m_gpu" "model" "m_socket" "m_thread" "num_proc" "os" "os_bit" "os_minor" "os_version" "os_distribution" "project" "qsc" "res_id" "seq_no" "slots" "vg")
+__uge_host_discrete_attributes=("arch" "m_core" "model" "m_socket" "m_thread" "num_proc" "project" "seq_no" "slots")
 
 ################################################################################
 # UGE command options
