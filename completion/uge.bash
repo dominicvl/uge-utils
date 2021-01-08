@@ -17,6 +17,8 @@ __uge_host_discrete_attributes=("arch" "m_core" "model" "m_socket" "m_thread" "n
 
 __qacct_options=" -ar -A -b -d -D -e -f -g -h -help -j -l -o -pe -P -q -si -slots -t"
 
+__qalter_options=" -help -a -adds -ac -ar -A -b -binding -c -ckpt -clearp -clears -cwd -CMDNAME -dc -dl -e -h -hold_jid -hold_jid_ad -i -j -jc -js -l -m -mods -masterl -masterq -mbind -notify -M -N -o -ot -P -p -par -pe -q -R -r -rou -rdi -sc -si -soft -S -t -tc -u -umask -v -verify -V -w -wd -xdv -xd -xd -xd_run_as_image_user -when"
+
 __qconf_options="-aattr -Aattr -acal -Acal -ace -ackpt -Ace -Ackpt -aconf -Aconf -adjs -adrs -ajc -Ajc -ae -Ae -ah -ahgrp -Ahgrp -arqs -Arqs -am -ao -ap -Ap -aprj -Aprj -aq -Aq -as -asi -Asi -astnode -astree -Astree -at -au -Au -auser -Auser -clearusage -clearltusage -cq -csi -dattr -Dattr -dcal -dce -dckpt -dconf -ddjs -ddrs -de -dh -dhgrp -djc -drqs -dm -do -dp -dprj -dq -ds -dsi -dstnode -dstree -du -dul -duser -help -ke -kec -kej -km -ks -kt -mattr -Mattr -mc -mce -mckpt -Mc -Mlur -mcal -Mcal -Mce -Mckpt -mconf -Mconf -me -Me -mhgrp -Mhgrp -mjc -Mjc -mrqs -Mrqs -mp -Mp -mprj -Mprj -mq -Mq -msconf -Msconf -msi -Msi -mstnode -Mstree -mstree -mu -Mu -muser -Muser -preferred -uha -purge -rattr -Rattr -sc -scal -scall -sce -sckpt -scel -sckptl -scl -sconf -sconfl -sdjs -sdjsl -sdrs -sdrsl -sdsl -se -secl -sec -sel -seld -sep -sh -shgrp -shgrp_tree -shgrp_resolved -shgrpl -si -sjc -sjcl -sds -slur -srqs -srqsl -sm -so -sobjl -sp -spl -sprj -sprjl -sprjld -sq -sql -ss -ssi -ssil -sss -ssconf -sstnode -rsstnode -sst -sstree -stl -su -suser -sul -suserl -tsm -Mlic -slic"
 
 __qdel_options="-f -help -s -si -t -u"
@@ -53,9 +55,7 @@ dropLastOfCsv() {
   local tmparr=($(echo $* | tr "," " "))
   local s=($(echo "${#tmparr[@]} - 1" | bc)) # end of slice index
   local a=("${tmparr[@]:0:$s}")
-  if [ $s -gt 0 ]; then
-    echo "${a[@]},"
-  fi
+  [[ $s -gt 0 ]] && echo "${a[@]},"
 }
 
 # Given a comma separated string, echoes last element.
@@ -85,19 +85,20 @@ _updateForResources() {
   [[ "$lastword" == "" ]] && return
   [[ $lastword == "-"* ]] && return
   local whole_line=$2
+  local sep=$3
   if [[ $lastword == *"," ]]; then
-    local res_flag_pos=`echo $whole_line | awk -v RS=" " -v s=-l '$0==s{print NR}'`
+    local res_flag_pos=`echo $whole_line | awk -v RS=" " -v s=$sep '$0==s{print NR}'`
     local num_words=$(numWords $whole_line)
     local d=$(echo "$num_words - $res_flag_pos" | bc)
     if [ $d -eq 1 ]; then
       # We are trying to complete a resource flag (or a value).
-      eval "$3='-l'"  # The true previous keyword.
-      eval "$4='--'"   # The true current option to complete.
+      eval "$4='$sep'"  # The true previous keyword.
+      eval "$5='--'"   # The true current option to complete.
     fi
   elif [[ $lastword == *","* ]]; then
-    eval "$3='-l'"  # The true previous word.
-    eval "$4=$(lastOfCsv $lastword)"        # The true option to complete
-    eval "$5=$(dropLastOfCsv $lastword)"    # Previously completed options
+    eval "$4='$sep'"  # The true previous word.
+    eval "$5=$(lastOfCsv $lastword)"        # The true option to complete
+    eval "$6=$(dropLastOfCsv $lastword)"    # Previously completed options
   fi
 }
 
@@ -122,6 +123,11 @@ __debugPrintAll() {
 # Helper functions retrieving information from the grid in real time.
 # Involves calling commands like qconf and qhost.
 ################################################################################
+__uge_list_pes() {
+    # Echoes list of parallel environments.
+    echo $(qconf -spl)
+}
+
 __uge_list_projects() {
   # Echoes list of grid projects.
   echo $(qconf -sprjl)
@@ -130,6 +136,11 @@ __uge_list_projects() {
 __uge_list_host_attributes() {
   # Echoes list of host attributes.
   echo ${__uge_host_attributes}
+}
+
+__uge_list_users() {
+    # Echoes list usernames.
+    echo $(qconf -suserl)
 }
 
 __uge_verify_mode_options() {
@@ -161,6 +172,11 @@ __uge_list_job_states() {
   echo "r s z S N P hu ho hs hd hj ha h a"
 }
 
+__uge_qdel_list_job_states() {
+    # Echoes possible job states for deletion.
+    echo "p r s S N P hu ho hs hd hj ha h a"
+}
+
 __uge_list_queue_states() {
   # Echoes possible queue states.
   echo "a c d o s u A C D E S"
@@ -172,17 +188,17 @@ __uge_list_queue_states() {
 #COMPREPLY=( $(compgen -P "${2-}" -W "$1" -S "${4-}" -- "$cur_") )
 ################################################################################
 __uge_complete() {
-local IFS=$' \t\n' cur_="${cur}"
-[[ $cur_ == *:* ]] && cur_="${cur#*:}"
-COMPREPLY=( $(compgen -W "$1" -- "$cur_") )
+  local IFS=$' \t\n' cur_="${cur}"
+  [[ $cur_ == *:* ]] && cur_="${cur#*:}"
+  COMPREPLY=( $(compgen -W "$1" -- "$cur_") )
 }
 
 # The 'add no space' version.
 __uge_completeNS() {
-local IFS=$' \t\n' cur_="${cur}"
-[[ $cur_ == *:* ]] && cur_="${cur#*:}"
-compopt -o nospace
-COMPREPLY=( $(compgen -W "$1" -- "$cur_") )
+  local IFS=$' \t\n' cur_="${cur}"
+  [[ $cur_ == *:* ]] && cur_="${cur#*:}"
+  compopt -o nospace
+  COMPREPLY=( $(compgen -W "$1" -- "$cur_") )
 }
 
 __uge_completeResourcesNS() {
@@ -190,8 +206,7 @@ __uge_completeResourcesNS() {
   [[ $cur_ == *:* ]] && cur_="${cur#*:}"
   # Do not append a white space after completion.
   compopt -o nospace
-  # Completion: insert the cumulative resource flags as prefix, appends '=' as suffix.
-  COMPREPLY=( $(compgen -P "$_cumulative_resource_flags" -W "$1" -S "=" -- "$cur_") )
+  COMPREPLY=( $(compgen -P "$_cumulative_resource_flags" -W "$1" -S "$2" -- "$cur_") )
 }
 
 __uge_filenames() {
@@ -211,6 +226,66 @@ __uge_filedirectories() {
 # Top level completion functions
 ################################################################################
 
+################################################################################
+# qalter
+################################################################################
+_qalter()
+{
+  local cur prev words cword
+  _init_completion -n : cur prev words cword || return
+  # Print debug.
+  [[ 0 -gt 1 ]] && __debugPrintAll
+  local lastword="$cur"
+  local whole_line="${COMP_LINE}"
+  _cumulative_resource_flags=""  # to hold previously completed options for
+                                 # the -l flag.
+  # Updates prev, cur and _cumulative_resource_flags variables if we are
+  # currently completing resource attributes from the -l argument.
+  _updateForResources "$lastword" "$whole_line" "-l" prev cur _cumulative_resource_flags
+  # Start with trivial cases: expand possible values for known - options.
+  case $prev in
+    -P)
+      __uge_complete "$(__uge_list_projects)"
+      return ;;
+    -S)
+      __uge_complete "$(__uge_list_shells)"
+      return ;;
+    -l)
+      __uge_completeResourcesNS "$(__uge_list_host_attributes)" "="
+      return ;;
+    -binding)
+      __uge_completeNS "$(__uge_list_binding_options)"
+      return ;;
+    -b | -j | -r | -R | -rdi)
+      __uge_complete "yes no"
+      return ;;
+    -u)
+      __uge_complete "$(__uge_list_users)"
+      return ;;
+    -w)
+      __uge_complete "$(__uge_verify_mode_options)"
+      return ;;
+    -wd)
+      __uge_directories
+      return ;;
+    -xd_run_as_image_user)
+      __uge_complete "yes no"
+      return ;;
+    -@)
+      __uge_filedirectories
+      return ;;
+  esac
+  case $cur in
+    -*)
+    __uge_complete "$__qalter_options"
+    return ;;
+  *)
+    __uge_filedirectories
+    return ;;
+  esac
+} &&
+  complete -F _qalter qalter # We don't use "-o nospace" as we let the function
+                             # decides what's best based on the scenario.
 
 ################################################################################
 # qconf
@@ -228,11 +303,77 @@ _qconf() {
       __uge_complete "$__qconf_options"
       return ;;
     *)
+      __uge_filedirectories
       return ;;
   esac
 } &&
   complete -F _qconf qconf  # We don't use "-o nospace" as we let the function
                             # decides what's best based on the scenario.
+
+################################################################################
+# qdel
+################################################################################
+_qdel() {
+  local cur prev words cword
+  _init_completion -n : cur prev words cword || return
+  case $prev in
+    -s)
+      __uge_complete "$(__uge_qdel_list_job_states)"
+      return ;;
+    -u)
+      __uge_complete "$(__uge_list_users)"
+      return ;;
+  esac
+  case $cur in
+    -*)
+      __uge_complete "$__qdel_options"
+      return ;;
+    *)
+      return ;;
+  esac
+} &&
+  complete -F _qdel qdel  # We don't use "-o nospace" as we let the function
+                          # decides what's best based on the scenario.
+
+################################################################################
+# qhost
+################################################################################
+_qhost() {
+  local cur prev words cword
+  _init_completion -n : cur prev words cword || return
+  # Print debug.
+  [[ 0 -gt 1 ]] && __debugPrintAll
+  local lastword="$cur"
+  local whole_line="${COMP_LINE}"
+  _cumulative_resource_flags=""  # to hold previously completed options for
+                                 # the -l/-F flag.
+  # Updates prev, cur and _cumulative_resource_flags variables if we are
+  # currently completing resource attributes from the -l/-F argument.
+  [[ "$prev" == "-l" ]] && _updateForResources "$lastword" "$whole_line" "-l" prev cur _cumulative_resource_flags
+  #_updateForResources "$lastword" "$whole_line" "$prev" prev cur _cumulative_resource_flags
+  [[ "$prev" == "-F" ]] && _updateForResources "$lastword" "$whole_line" "-F" prev cur _cumulative_resource_flags
+  # Start with trivial cases: expand possible values for known - options.
+  case $prev in
+    -l)
+        __uge_completeResourcesNS "$(__uge_list_host_attributes)" "="
+        return ;;
+    -F)
+      __uge_completeResourcesNS "$(__uge_list_host_attributes)" ","
+      return ;;
+    -u)
+      __uge_complete "$(__uge_list_users)"
+      return ;;
+  esac
+  case $cur in
+    -*)
+      __uge_complete "$__qhost_options"
+      return ;;
+    *)
+    return ;;
+  esac
+} &&
+  complete -F _qhost qhost # We don't use "-o nospace" as we let the function
+                           # decides what's best based on the scenario.
 
 ################################################################################
 # qrsh
@@ -248,14 +389,14 @@ _qrsh() {
                                  # the -l flag.
   # Updates prev, cur and _cumulative_resource_flags variables if we are
   # currently completing resource attributes from the -l argument.
-  _updateForResources "$lastword" "$whole_line" prev cur _cumulative_resource_flags
+  _updateForResources "$lastword" "$whole_line" "-l" prev cur _cumulative_resource_flags
   # Start with trivial cases: expand possible values for known - options.
   case $prev in
     -P)
       __uge_complete "$(__uge_list_projects)"
       return ;;
     -l)
-      __uge_completeResourcesNS "$(__uge_list_host_attributes)"
+      __uge_completeResourcesNS "$(__uge_list_host_attributes)" "="
       return ;;
     -binding)
       __uge_completeNS "$(__uge_list_binding_options)"
@@ -292,7 +433,7 @@ _qsh() {
                                  # the -l flag.
   # Updates prev, cur and _cumulative_resource_flags variables if we are
   # currently completing resource attributes from the -l argument.
-  _updateForResources "$lastword" "$whole_line" prev cur _cumulative_resource_flags
+  _updateForResources "$lastword" "$whole_line" "-l" prev cur _cumulative_resource_flags
   # Start with trivial cases: expand possible values for known - options.
   case $prev in
     -P)
@@ -302,7 +443,7 @@ _qsh() {
       __uge_complete "$(__uge_list_shells)"
       return ;;
     -l)
-      __uge_completeResourcesNS "$(__uge_list_host_attributes)"
+      __uge_completeResourcesNS "$(__uge_list_host_attributes)" "="
       return ;;
     -binding)
       __uge_completeNS "$(__uge_list_binding_options)"
@@ -340,21 +481,27 @@ _qstat()
                                  # the -l flag.
   # Updates prev, cur and _cumulative_resource_flags variables if we are
   # currently completing resource attributes from the -l argument.
-  _updateForResources "$lastword" "$whole_line" prev cur _cumulative_resource_flags
+  _updateForResources "$lastword" "$whole_line" "-l" prev cur _cumulative_resource_flags
   # Start with trivial cases: expand possible values for known - options.
   case $prev in
     -s)
       __uge_complete "$(__uge_list_job_states)"
       return ;;
-    -qs)
-      __uge_complete "$(__uge_list_queue_states)"
-      return ;;
     -explain)
       __uge_complete "$(__uge_list_host_states)"
       return ;;
     -l)
-      __uge_completeResourcesNS "$(__uge_list_host_attributes)"
+      __uge_completeResourcesNS "$(__uge_list_host_attributes)" "="
       return ;;
+    -pe)
+      __uge_complete "$(__uge_list_pes)"
+      return ;;
+    -qs)
+        __uge_complete "$(__uge_list_queue_states)"
+        return ;;
+    -u)
+        __uge_complete "$(__uge_list_users)"
+        return ;;
   esac
   case $cur in
     -*)
@@ -383,7 +530,7 @@ _qsub()
                                  # the -l flag.
   # Updates prev, cur and _cumulative_resource_flags variables if we are
   # currently completing resource attributes from the -l argument.
-  _updateForResources "$lastword" "$whole_line" prev cur _cumulative_resource_flags
+  _updateForResources "$lastword" "$whole_line" "-l" prev cur _cumulative_resource_flags
   # Start with trivial cases: expand possible values for known - options.
   case $prev in
     -P)
@@ -393,20 +540,26 @@ _qsub()
       __uge_complete "$(__uge_list_shells)"
       return ;;
     -l)
-      __uge_completeResourcesNS "$(__uge_list_host_attributes)"
+      __uge_completeResourcesNS "$(__uge_list_host_attributes)" "="
       return ;;
     -binding)
       __uge_completeNS "$(__uge_list_binding_options)"
       return ;;
-    -b | -j | -now | -pty | -r | -R | -rdi | -shell)
+    -b | -j | -now | -pty | -r | -R | -rdi | -shell | -tcon)
       __uge_complete "yes no"
       return ;;
     -w)
       __uge_complete "$(__uge_verify_mode_options)"
       return ;;
+    -wd)
+        __uge_directories
+        return ;;
     -xd_run_as_image_user)
       __uge_complete "yes no"
       return ;;
+    -@)
+        __uge_filedirectories
+        return ;;
   esac
   case $cur in
     -*)
